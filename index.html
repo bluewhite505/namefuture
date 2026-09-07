@@ -72,4 +72,64 @@ async function analyze(){const raw=document.querySelector('#name').value;const s
 async function shareResult(name,score,level){const text=`${name}'s baby-name saturation risk: ${score}/100 (${level}). Would you still use it?`;try{await navigator.clipboard.writeText(text+' '+location.href);alert('Result copied.')}catch(e){alert(text)}}
 document.querySelector('#name').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
 </script>
+  <script>
+const NAMEFUTURE_WEBHOOK =
+  "https://hook.eu1.make.com/c8lnnvep71m20go27dnl3sf111q98gra";
+
+function getSessionId() {
+  let id = localStorage.getItem("namefuture_session_id");
+
+  if (!id) {
+    id =
+      (crypto.randomUUID && crypto.randomUUID()) ||
+      "nf_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+
+    localStorage.setItem("namefuture_session_id", id);
+  }
+
+  return id;
+}
+
+function getUTM() {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    utm_source: params.get("utm_source") || "",
+    utm_medium: params.get("utm_medium") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+    utm_content: params.get("utm_content") || ""
+  };
+}
+
+function trackNameFuture(eventName, extra = {}) {
+  const utm = getUTM();
+
+  const payload = {
+    timestamp: new Date().toISOString(),
+    session_id: getSessionId(),
+    event: eventName,
+
+    name: extra.name || "",
+    sex: extra.sex || "",
+    email: extra.email || "",
+
+    referrer: document.referrer || "",
+    page_url: window.location.href,
+
+    ...utm
+  };
+
+  fetch(NAMEFUTURE_WEBHOOK, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload),
+    keepalive: true
+  }).catch(() => {});
+}
+
+// automatic visit tracking
+trackNameFuture("page_view");
+</script>
 </body></html>
