@@ -65,9 +65,55 @@ function linreg(points){if(points.length<2)return{m:0,b:points[0]?.y||0};const n
 function calc(x,meta){if(!x||!x.series.length)return null;const latestYear=meta.latestYear;const current=x.series.find(d=>d.year===latestYear)||null;const last=x.series[x.series.length-1];const recent=x.series.filter(d=>d.year>=latestYear-5);const trendPts=recent.map(d=>({x:d.year,y:Math.log(Math.max(1,d.rank))}));const fit=linreg(trendPts);let projRank=Math.round(Math.exp(fit.m*(latestYear+5)+fit.b));const maxRank=(meta.maxRanks[String(latestYear)]||{})[x.sex]||20000;projRank=Math.min(maxRank+5000,Math.max(1,projRank));const ref=current||last;const total=(meta.totals[String(ref.year)]?.F||0)+(meta.totals[String(ref.year)]?.M||0);const p=total?ref.count/total:0;const collision30=1-Math.pow(1-p,29);const rankBase=current?Math.max(0,100-Math.log10(Math.max(1,current.rank))*28):Math.max(0,38-Math.min(30,(latestYear-last.year)*3));const momentum=recent.length>=2?Math.max(-30,Math.min(30,-fit.m*55)):0;const countSignal=Math.min(25,Math.log10(Math.max(5,ref.count))*7);let score=Math.round(Math.max(1,Math.min(99,rankBase*.72+countSignal+momentum)));if(!current)score=Math.max(1,score-Math.min(30,(latestYear-last.year)*4));const level=score>=72?'HIGH':score>=45?'MEDIUM':'LOW';const lo=Math.max(1,Math.round(projRank*.72)),hi=Math.max(lo+1,Math.round(projRank*1.38));const first=x.series[0];return{...x,current,last,ref,collision30,score,level,lo,hi,projRank,firstYear:first.year,latestYear,yearsSeen:x.series.length,trendSlope:fit.m}}
 function verdict(r){if(!r.current)return `${r.name} is not recorded for ${r.sex==='F'?'girls':'boys'} in ${r.latestYear} at SSA's 5-birth privacy threshold. Its most recent recorded year was ${r.last.year}, which points to low current saturation — but extremely rare names are harder to forecast reliably.`;if(r.level==='HIGH')return `${r.name} is already in a crowded part of the name market. Its recent ranking trajectory adds to the saturation signal, so the bigger risk is not popularity today — it is how crowded the name may feel by kindergarten.`;if(r.level==='MEDIUM')return `${r.name} sits in the watch zone: recognizable, not hyper-saturated, but active enough that future crowding is plausible.`;return `${r.name} currently shows lower saturation pressure. Lower risk is not a promise of rarity; it means the crowding signal is weaker in the published SSA history.`}
 function loading(raw){const box=document.querySelector('#results');box.style.display='block';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">SEARCHING THE FULL SSA HISTORY</div><div class="rn">${title(raw)||'Name'}</div></div></div><div class="free-side"><div class="verdict"><h3>Checking 1880 → latest published year…</h3><p>Loading the relevant database shard and calculating the trend.</p></div></div></div>`;box.scrollIntoView({behavior:'smooth',block:'start'});return box}
-function paywall(raw,sex){const box=document.querySelector('#results');const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';trackNameFuture('paywall_seen',{name:title(raw),sex});box.style.display='block';box.innerHTML=`<div class="result-shell"><div class="paywall-only"><span class="paywall-lock">↳ FREE CHECK USED</span><h2>You checked ${firstFreeName()}. Now compare the names that actually made your shortlist.</h2><p><b>${title(raw)}</b> would be your second free lookup. Instead of giving away unlimited searches, NameFuture unlocks the decision view: compare up to five finalists against the full SSA history, future crowding and collision risk.</p><div class="usage-pill"><b>1/1</b> free prediction used</div><div class="paywall-actions"><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${title(raw).replace(/'/g,"\\'")}',sex:'${sex}'})">Unlock 5-name comparison · ${CFG.PRODUCT_PRICE||'$19'} →</a><button class="ghostbtn" onclick="document.querySelector('#name').focus()">Change the name</button></div><div class="used-note">Your free check has been used on this browser. Unlock the comparison view to test up to five finalists.</div></div></div>`;box.scrollIntoView({behavior:'smooth',block:'start'})}
+function paywall(raw,sex){
+  const box=document.querySelector('#results');
+  const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';
+  const savedEmail=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';
+  const freeName=firstFreeName();
+
+  trackNameFuture('paywall_seen',{name:title(raw),sex});
+
+  const emailBlock=savedEmail ? '' : `
+    <div class="email-capture" style="margin-top:24px">
+      <h4>Want to keep your ${freeName} result?</h4>
+      <p>Enter your email and we’ll save your first NameFuture result so you can come back to it later.</p>
+      <div class="email-row">
+        <input id="resultEmail" type="email" placeholder="you@example.com">
+        <button onclick="saveEmail('${freeName.replace(/'/g,"\'")}','${sex}')">Save my ${freeName} result →</button>
+      </div>
+      <div class="email-ok" id="emailOk"></div>
+    </div>`;
+
+  box.style.display='block';
+  box.innerHTML=`
+    <div class="result-shell">
+      <div class="paywall-only">
+        <span class="paywall-lock">↳ FREE CHECK USED</span>
+        <h2>You checked ${freeName}. Now compare the names that actually made your shortlist.</h2>
+        <p><b>${title(raw)}</b> would be your second lookup. Unlock the decision view to compare up to five finalists against the full SSA history, future crowding and collision risk.</p>
+        <div class="usage-pill"><b>1/1</b> free prediction used</div>
+
+        ${emailBlock}
+
+        <div class="paywall-actions">
+          <a class="paybtn"
+             href="${stripe}"
+             target="_blank"
+             rel="noopener"
+             onclick="trackNameFuture('checkout_clicked',{name:'${title(raw).replace(/'/g,"\'")}',sex:'${sex}'})">
+             Unlock 5-name comparison · ${CFG.PRODUCT_PRICE||'$19'} →
+          </a>
+          <button class="ghostbtn" onclick="document.querySelector('#name').focus()">Change the name</button>
+        </div>
+
+        <div class="used-note">Your free check has been used on this browser. Unlock the comparison view to test up to five finalists.</div>
+      </div>
+    </div>`;
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 async function saveEmail(name,sex){trackNameFuture('save_clicked',{name,sex});const el=document.querySelector('#resultEmail');const msg=document.querySelector('#emailOk');if(!el)return;const email=el.value.trim();if(!/^\S+@\S+\.\S+$/.test(email)){el.focus();return}localStorage.setItem(EMAIL_KEY,email);setCookie(EMAIL_KEY,email,365);const endpoint=CFG.EMAIL_CAPTURE_ENDPOINT||'';if(endpoint){try{await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name,sex,source:'namefuture_free_result'})})}catch(e){}}trackNameFuture('email_saved',{name,sex,email});
-if(msg){msg.style.display='block';msg.textContent='Saved. We’ll use '+email+' to keep this result connected to you.'}el.disabled=true}
+if(msg){msg.style.display='block';msg.textContent='Saved. Your result is connected to '+email+'.'}el.disabled=true}
 async function analyze(){const raw=document.querySelector('#name').value;const sex=document.querySelector('#sex').value;if(!norm(raw))return;trackNameFuture('name_submitted',{name:title(raw),sex});if(paidUnlocked()){showPaidCompareUnlocked(title(raw),sex);return}if(freeUsed()){trackNameFuture('second_name_attempted',{name:title(raw),sex});paywall(raw,sex);return}const box=loading(raw);try{const meta=await getMeta();const found=await lookup(raw,sex);if(!found){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${title(raw)}</div></div></div><div class="free-side"><div class="verdict"><h3>No published SSA record found.</h3><p>SSA only publishes a name/sex/year combination when at least 5 babies received that name. This spelling may be extremely rare, absent from Social Security records, or entered differently.</p></div></div></div>`;return}const r=calc(found,meta);if(!r){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${found.name}</div></div></div><div class="free-side"><div class="verdict"><h3>Not recorded for this sex.</h3><p>The name exists in SSA data, but not for the selected sex at the publication threshold.</p></div></div></div>`;return}markFreeUsed(r.name);trackNameFuture('free_result_seen',{name:r.name,sex});const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';const currentRank=r.current?`#${r.current.rank}`:'—';const lastSeen=r.current?`${r.latestYear}`:`${r.last.year}`;const saved=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">YOUR ONE FREE NAME FUTURE · SSA ${r.firstYear}–${r.latestYear}</div><div class="rn">${r.name}</div></div><div class="score-pill"><strong>${r.score}<small>/100</small></strong><span>${r.level} SATURATION RISK</span></div></div><div class="result-body"><div class="free-side"><div class="stats"><div class="stat"><small>${r.latestYear} national rank</small><b>${currentRank}</b></div><div class="stat"><small>Same-name chance · 30 kids</small><b>${(r.collision30*100).toFixed(1)}%</b></div><div class="stat"><small>2030 projected range*</small><b>#${r.lo}–#${r.hi}</b></div></div><div class="verdict"><h3>${r.level==='HIGH'?'Trend-trap warning.':'The read on '+r.name+'.'}</h3><p>${verdict(r)}</p></div><div class="stats" style="margin-top:10px"><div class="stat"><small>First SSA record</small><b>${r.firstYear}</b></div><div class="stat"><small>Most recent record</small><b>${lastSeen}</b></div><div class="stat"><small>Years recorded</small><b>${r.yearsSeen}</b></div></div><div class="email-capture"><h4>Save this result before you leave.</h4><p>Enter your email and we’ll send you a copy of this result so you can come back to it anytime.</p><div class="email-row"><input id="resultEmail" type="email" placeholder="you@example.com" value="${saved}"><button onclick="saveEmail('${r.name.replace(/'/g,"\'")}','${sex}')">Save my result →</button></div><div class="email-ok" id="emailOk"></div></div><button class="share" onclick="shareResult('${r.name.replace(/'/g,"\'")}',${r.score},'${r.level}')">Copy shareable result ↗</button><div class="note">*Directional estimate from recent national ranking trajectory. SSA suppresses name/sex/year combinations with fewer than 5 occurrences.</div></div><aside class="paid"><small>YOUR FREE CHECK IS NOW USED</small><h3>Want to test another name?</h3><p>Your first prediction was free. Unlock the decision view to compare up to five finalists side by side.</p><ul><li>Saturation score for all 5</li><li>Future crowding comparison</li><li>2030 projection ranges</li><li>Lowest-risk finalist verdict</li></ul><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${r.name.replace(/'/g,"\'")}',sex:'${sex}'})">Compare my 5 names · ${CFG.PRODUCT_PRICE||'$19'} →</a></aside></div></div>`}catch(err){box.innerHTML=`<div class="result-shell"><div class="free-side"><div class="verdict"><h3>We couldn't load the name data.</h3><p>${err.message} Please refresh the page and try again.</p></div></div></div>`}}
 async function shareResult(name,score,level){const text=`${name}'s baby-name saturation risk: ${score}/100 (${level}). Would you still use it?`;try{await navigator.clipboard.writeText(text+' '+location.href);alert('Result copied.')}catch(e){alert(text)}}
 document.querySelector('#name').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
@@ -104,18 +150,35 @@ function getUTM() {
 function trackNameFuture(eventName, extra = {}) {
   const utm = getUTM();
 
+  // Prevent the same user action from being counted twice by rapid
+  // double-clicks, re-rendered handlers, or embedded previews.
+  const dedupeKey =
+    "nf_event_" +
+    eventName + "_" +
+    (extra.name || "") + "_" +
+    (extra.sex || "");
+
+  const now = Date.now();
+  const last = Number(sessionStorage.getItem(dedupeKey) || 0);
+
+  // page_view is handled separately below.
+  if (eventName !== "page_view" && now - last < 2000) {
+    return;
+  }
+
+  if (eventName !== "page_view") {
+    sessionStorage.setItem(dedupeKey, String(now));
+  }
+
   const payload = {
     timestamp: new Date().toISOString(),
     session_id: getSessionId(),
     event: eventName,
-
     name: extra.name || "",
     sex: extra.sex || "",
     email: extra.email || "",
-
     referrer: document.referrer || "",
     page_url: window.location.href,
-
     ...utm
   };
 
@@ -365,8 +428,12 @@ async function runPaidCompare() {
 }
 
 
-// automatic visit tracking
-trackNameFuture("page_view");
+// Count one page view per page/tab session instead of every preview re-render.
+const PAGE_VIEW_KEY = "namefuture_page_view_" + location.pathname + location.search;
+if (!sessionStorage.getItem(PAGE_VIEW_KEY)) {
+  sessionStorage.setItem(PAGE_VIEW_KEY, "1");
+  trackNameFuture("page_view");
+}
 verifyReturnedPayment();
 </script>
 </body></html>
