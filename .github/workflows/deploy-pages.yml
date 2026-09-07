@@ -20,6 +20,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,8 +30,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build complete SSA dataset
+      - name: Build CURRENT complete SSA dataset
         run: python scripts/build_ssa_data.py
+
+      - name: Verify dataset reaches 2025
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          meta = json.loads(Path('data/meta.json').read_text())
+          latest = int(meta['latestYear'])
+          print('Built SSA data through:', latest)
+          if latest < 2025:
+              raise SystemExit(f'Refusing deploy: stale SSA data ends at {latest}')
+          PY
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
