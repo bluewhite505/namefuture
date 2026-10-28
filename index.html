@@ -97,6 +97,12 @@
 }
 
 </style>
+<!-- Reddit Pixel -->
+<script>
+!function(w,d){if(!w.rdt){var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};p.callQueue=[];var t=d.createElement("script");t.src="https://www.redditstatic.com/ads/pixel.js?pixel_id=a2_jnaaf8q6qghq",t.async=!0;var s=d.getElementsByTagName("script")[0];s.parentNode.insertBefore(t,s)}}(window,document);rdt('init','a2_jnaaf8q6qghq');rdt('track', 'PageVisit');
+</script>
+<!-- DO NOT MODIFY UNLESS TO REPLACE A USER IDENTIFIER -->
+<!-- End Reddit Pixel -->
 </head>
 <body>
 <header class="nav shell"><div class="brand">Name<span>Future</span></div><div class="status"><i></i> Official U.S. SSA national data</div></header>
@@ -347,6 +353,14 @@ async function verifyReturnedPayment() {
       trackNameFuture("payment_success", {
         email: data.customer_email || ""
       });
+
+      if (typeof window.rdt === "function") {
+        window.rdt("track", "Purchase", {
+          value: 19,
+          currency: "USD",
+          itemCount: 1
+        });
+      }
 
       history.replaceState({}, document.title, window.location.pathname);
       showPaidCompareUnlocked("", "");
