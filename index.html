@@ -433,7 +433,56 @@ async function submitFreeEmailGate(name, sex) {
 
 async function saveEmail(name,sex){trackNameFuture('save_clicked',{name,sex});const el=document.querySelector('#resultEmail');const msg=document.querySelector('#emailOk');if(!el)return;const email=el.value.trim();if(!/^\S+@\S+\.\S+$/.test(email)){el.focus();return}localStorage.setItem(EMAIL_KEY,email);setCookie(EMAIL_KEY,email,365);const endpoint=CFG.EMAIL_CAPTURE_ENDPOINT||'';if(endpoint){try{await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name,sex,source:'namefuture_free_result'})})}catch(e){}}trackNameFuture('email_saved',{name,sex,email});
 if(msg){msg.style.display='block';msg.textContent='Saved. Your result is connected to '+email+'.'}el.disabled=true}
-async function analyze(skipEmailGate=false){const raw=document.querySelector('#name').value;const sex=document.querySelector('#sex').value;if(!norm(raw))return;const savedEmail=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';if(!skipEmailGate&&!savedEmail&&!paidUnlocked()){showFreeEmailGate(raw,sex);return}trackNameFuture('name_submitted',{name:title(raw),sex});if(paidUnlocked()){showPaidCompareUnlocked(title(raw),sex);return}if(freeUsed()){trackNameFuture('second_name_attempted',{name:title(raw),sex});paywall(raw,sex);return}const box=loading(raw);try{const meta=await getMeta();const found=await lookup(raw,sex);if(!found){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${title(raw)}</div></div></div><div class="free-side"><div class="verdict"><h3>No published SSA record found.</h3><p>SSA only publishes a name/sex/year combination when at least 5 babies received that name. This spelling may be extremely rare, absent from Social Security records, or entered differently.</p></div></div></div>`;return}const r=calc(found,meta);if(!r){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${found.name}</div></div></div><div class="free-side"><div class="verdict"><h3>Not recorded for this sex.</h3><p>The name exists in SSA data, but not for the selected sex at the publication threshold.</p></div></div></div>`;return}markFreeUsed(r.name);trackNameFuture('free_result_seen',{name:r.name,sex});sendNameFutureReport('free_report_ready',{report_type:'free',name:r.name,sex,email:localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'',score:r.score,level:r.level,current_rank:r.current?`#${r.current.rank}`:'—',projected_range:`#${r.lo}–#${r.hi}`,collision_30:`${(r.collision30*100).toFixed(1)}%`});const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';const currentRank=r.current?`#${r.current.rank}`:'—';const lastSeen=r.current?`${r.latestYear}`:`${r.last.year}`;const saved=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">YOUR ONE FREE NAME FUTURE · SSA ${r.firstYear}–${r.latestYear}</div><div class="rn">${r.name}</div></div><div class="score-pill"><strong>${r.score}<small>/100</small></strong><span>${r.level} SATURATION RISK</span></div></div><div class="result-body"><div class="free-side"><div class="stats"><div class="stat"><small>${r.latestYear} national rank</small><b>${currentRank}</b></div><div class="stat"><small>Same-name chance · 30 kids</small><b>${(r.collision30*100).toFixed(1)}%</b></div><div class="stat"><small>2030 projected range*</small><b>#${r.lo}–#${r.hi}</b></div></div><div class="verdict"><h3>${r.level==='HIGH'?'Trend-trap warning.':'The read on '+r.name+'.'}</h3><p>${verdict(r)}</p></div><div class="stats" style="margin-top:10px"><div class="stat"><small>First SSA record</small><b>${r.firstYear}</b></div><div class="stat"><small>Most recent record</small><b>${lastSeen}</b></div><div class="stat"><small>Years recorded</small><b>${r.yearsSeen}</b></div></div><div class="report-linked"><b>Report linked to ${saved || 'your email'}.</b> Your free check is now used. If you want to compare the names you’re seriously considering, use the shortlist decision report.</div><button class="share" onclick="shareResult('${r.name.replace(/'/g,"\'")}',${r.score},'${r.level}')">Copy shareable result ↗</button><div class="note">*Directional estimate from recent national ranking trajectory. SSA suppresses name/sex/year combinations with fewer than 5 occurrences.</div></div><aside class="paid"><small>YOUR SHORTLIST DECISION</small><h3>${r.name.toUpperCase()} ${r.level==='HIGH'?'is getting crowded.':r.level==='MEDIUM'?'is in the watch zone.':'looks relatively low-risk.'}</h3><p>Today it ranks ${currentRank}.${r.current?` Its recent trajectory suggests it could move into the #${r.lo}–#${r.hi} range by 2030.`:''}</p><h3 style="font-size:27px;margin-top:22px">But how does it compare with the names you may actually choose?</h3><p>You probably have more than one favorite. Compare them before you make the final call.</p><div style="font-family:'Manrope';font-size:20px;font-weight:800;margin:22px 0 8px">Compare your real shortlist</div><ul><li>See which is least likely to feel overused</li><li>Compare saturation side by side</li><li>See future popularity ranges</li><li>Check same-name collision risk</li><li>Share the shortlist with your partner</li></ul><div style="font-size:14px;font-weight:900;margin:10px 0 14px">$19 one-time · 1 shortlist · up to 5 names · No subscription</div><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${r.name.replace(/'/g,"\'")}',sex:'${sex}'})">Compare My Shortlist · ${CFG.PRODUCT_PRICE||'$19'} →</a><div style="font-size:11px;text-align:center;margin-top:10px;font-weight:800;color:#48502f">No guessing. No endless baby-name lists. Just a clearer decision.</div></aside></div></div>`}catch(err){box.innerHTML=`<div class="result-shell"><div class="free-side"><div class="verdict"><h3>We couldn't load the name data.</h3><p>${err.message} Please refresh the page and try again.</p></div></div></div>`}}
+async function analyze(skipEmailGate=false){
+  const raw=document.querySelector('#name').value;
+  const sex=document.querySelector('#sex').value;
+  if(!norm(raw))return;
+
+  let savedEmail=
+    localStorage.getItem(EMAIL_KEY)||
+    getCookie(EMAIL_KEY)||
+    '';
+
+  // EMAIL IS ALWAYS REQUIRED BEFORE A FREE REPORT.
+  // A stale paid cookie/localStorage flag can never bypass this.
+  if(!skipEmailGate && !savedEmail){
+    showFreeEmailGate(raw,sex);
+    return;
+  }
+
+  // Only a Stripe session verified by the Worker may unlock paid comparison.
+  const verifiedPaid = await getVerifiedPaidAccess();
+
+  // Stripe verification may restore the customer's email.
+  savedEmail=
+    localStorage.getItem(EMAIL_KEY)||
+    getCookie(EMAIL_KEY)||
+    savedEmail;
+
+  if(!skipEmailGate && !savedEmail){
+    showFreeEmailGate(raw,sex);
+    return;
+  }
+
+  trackNameFuture('name_submitted',{name:title(raw),sex});
+
+  if(verifiedPaid.paid === true && verifiedPaid.used !== true){
+    showPaidCompareUnlocked(title(raw),sex,true);
+    return;
+  }
+
+  if(verifiedPaid.paid === true && verifiedPaid.used === true){
+    showPaidComparisonUsed();
+    return;
+  }
+
+  if(freeUsed()){
+    trackNameFuture('second_name_attempted',{name:title(raw),sex});
+    paywall(raw,sex);
+    return;
+  }
+
+const box=loading(raw);try{const meta=await getMeta();const found=await lookup(raw,sex);if(!found){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${title(raw)}</div></div></div><div class="free-side"><div class="verdict"><h3>No published SSA record found.</h3><p>SSA only publishes a name/sex/year combination when at least 5 babies received that name. This spelling may be extremely rare, absent from Social Security records, or entered differently.</p></div></div></div>`;return}const r=calc(found,meta);if(!r){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${found.name}</div></div></div><div class="free-side"><div class="verdict"><h3>Not recorded for this sex.</h3><p>The name exists in SSA data, but not for the selected sex at the publication threshold.</p></div></div></div>`;return}markFreeUsed(r.name);trackNameFuture('free_result_seen',{name:r.name,sex});sendNameFutureReport('free_report_ready',{report_type:'free',name:r.name,sex,email:localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'',score:r.score,level:r.level,current_rank:r.current?`#${r.current.rank}`:'—',projected_range:`#${r.lo}–#${r.hi}`,collision_30:`${(r.collision30*100).toFixed(1)}%`});const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';const currentRank=r.current?`#${r.current.rank}`:'—';const lastSeen=r.current?`${r.latestYear}`:`${r.last.year}`;const saved=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">YOUR ONE FREE NAME FUTURE · SSA ${r.firstYear}–${r.latestYear}</div><div class="rn">${r.name}</div></div><div class="score-pill"><strong>${r.score}<small>/100</small></strong><span>${r.level} SATURATION RISK</span></div></div><div class="result-body"><div class="free-side"><div class="stats"><div class="stat"><small>${r.latestYear} national rank</small><b>${currentRank}</b></div><div class="stat"><small>Same-name chance · 30 kids</small><b>${(r.collision30*100).toFixed(1)}%</b></div><div class="stat"><small>2030 projected range*</small><b>#${r.lo}–#${r.hi}</b></div></div><div class="verdict"><h3>${r.level==='HIGH'?'Trend-trap warning.':'The read on '+r.name+'.'}</h3><p>${verdict(r)}</p></div><div class="stats" style="margin-top:10px"><div class="stat"><small>First SSA record</small><b>${r.firstYear}</b></div><div class="stat"><small>Most recent record</small><b>${lastSeen}</b></div><div class="stat"><small>Years recorded</small><b>${r.yearsSeen}</b></div></div><div class="report-linked"><b>Report linked to ${saved || 'your email'}.</b> Your free check is now used. If you want to compare the names you’re seriously considering, use the shortlist decision report.</div><button class="share" onclick="shareResult('${r.name.replace(/'/g,"\'")}',${r.score},'${r.level}')">Copy shareable result ↗</button><div class="note">*Directional estimate from recent national ranking trajectory. SSA suppresses name/sex/year combinations with fewer than 5 occurrences.</div></div><aside class="paid"><small>YOUR SHORTLIST DECISION</small><h3>${r.name.toUpperCase()} ${r.level==='HIGH'?'is getting crowded.':r.level==='MEDIUM'?'is in the watch zone.':'looks relatively low-risk.'}</h3><p>Today it ranks ${currentRank}.${r.current?` Its recent trajectory suggests it could move into the #${r.lo}–#${r.hi} range by 2030.`:''}</p><h3 style="font-size:27px;margin-top:22px">But how does it compare with the names you may actually choose?</h3><p>You probably have more than one favorite. Compare them before you make the final call.</p><div style="font-family:'Manrope';font-size:20px;font-weight:800;margin:22px 0 8px">Compare your real shortlist</div><ul><li>See which is least likely to feel overused</li><li>Compare saturation side by side</li><li>See future popularity ranges</li><li>Check same-name collision risk</li><li>Share the shortlist with your partner</li></ul><div style="font-size:14px;font-weight:900;margin:10px 0 14px">$19 one-time · 1 shortlist · up to 5 names · No subscription</div><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${r.name.replace(/'/g,"\'")}',sex:'${sex}'})">Compare My Shortlist · ${CFG.PRODUCT_PRICE||'$19'} →</a><div style="font-size:11px;text-align:center;margin-top:10px;font-weight:800;color:#48502f">No guessing. No endless baby-name lists. Just a clearer decision.</div></aside></div></div>`}catch(err){box.innerHTML=`<div class="result-shell"><div class="free-side"><div class="verdict"><h3>We couldn't load the name data.</h3><p>${err.message} Please refresh the page and try again.</p></div></div></div>`}}
 async function shareResult(name,score,level){const text=`${name}'s baby-name saturation risk: ${score}/100 (${level}). Would you still use it?`;try{await navigator.clipboard.writeText(text+' '+location.href);alert('Result copied.')}catch(e){alert(text)}}
 document.querySelector('#name').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
 </script>
@@ -548,7 +597,49 @@ const PAID_COMPARE_USED_KEY = "namefuture_paid_compare_used_v1";
 const PAID_SESSION_KEY = "namefuture_paid_session_id_v1";
 
 function paidUnlocked() {
-  return localStorage.getItem(PAID_KEY) === "1" || getCookie(PAID_KEY) === "1";
+  // Legacy local paid flags are NOT trusted anymore.
+  // Real paid access must be verified against the Worker/Stripe session.
+  return false;
+}
+
+async function getVerifiedPaidAccess() {
+  const sessionId =
+    localStorage.getItem(PAID_SESSION_KEY) ||
+    getCookie(PAID_SESSION_KEY) ||
+    "";
+
+  if (!sessionId) return { paid:false, used:false };
+
+  try {
+    const response = await fetch(
+      NAMEFUTURE_PAYMENT_VERIFY +
+        "?session_id=" +
+        encodeURIComponent(sessionId)
+    );
+
+    const data = await response.json();
+
+    if (
+      response.ok &&
+      data.ok === true &&
+      data.paid === true &&
+      data.valid_product !== false
+    ) {
+      if (data.customer_email) {
+        localStorage.setItem(EMAIL_KEY, data.customer_email);
+        setCookie(EMAIL_KEY, data.customer_email, 365);
+      }
+
+      return {
+        paid: true,
+        used: data.used === true || data.status === "used",
+        session_id: sessionId,
+        email: data.customer_email || ""
+      };
+    }
+  } catch (e) {}
+
+  return { paid:false, used:false };
 }
 
 function paidCompareUsed() {
@@ -561,8 +652,10 @@ function markPaidCompareUsed() {
 }
 
 function markPaidUnlocked(email = "", sessionId = "") {
-  localStorage.setItem(PAID_KEY, "1");
-  setCookie(PAID_KEY, "1", 365);
+  // Remove legacy paid flags so they can never unlock the paid UI.
+  localStorage.removeItem(PAID_KEY);
+  setCookie(PAID_KEY, "", -1);
+
   localStorage.removeItem(PAID_COMPARE_USED_KEY);
   setCookie(PAID_COMPARE_USED_KEY, "", -1);
 
@@ -661,7 +754,7 @@ async function verifyReturnedPayment() {
       }
 
       history.replaceState({}, document.title, window.location.pathname);
-      showPaidCompareUnlocked("", "");
+      showPaidCompareUnlocked("", "", true);
       return;
     }
 
@@ -688,9 +781,34 @@ async function verifyReturnedPayment() {
   }
 }
 
-function showPaidCompareUnlocked(prefillName = "", prefillSex = "") {
+async function showPaidCompareUnlocked(prefillName = "", prefillSex = "", alreadyVerified = false) {
   const box = document.querySelector("#results");
+
+  if (!alreadyVerified) {
+    const verified = await getVerifiedPaidAccess();
+
+    if (!verified.paid) {
+      box.style.display = "block";
+      box.innerHTML = `
+        <div class="result-shell">
+          <div class="paywall-only">
+            <span class="paywall-lock">PAID ACCESS REQUIRED</span>
+            <h2>This comparison requires a verified $19 purchase.</h2>
+            <p>No paid access was found for this browser.</p>
+          </div>
+        </div>`;
+      box.scrollIntoView({behavior:"smooth",block:"start"});
+      return;
+    }
+
+    if (verified.used) {
+      showPaidComparisonUsed();
+      return;
+    }
+  }
+
   if (paidCompareUsed()) {
+    // local marker is only a UI convenience; server verification above is authoritative
     showPaidComparisonUsed();
     return;
   }
@@ -1051,6 +1169,10 @@ if (!sessionStorage.getItem(PAGE_VIEW_KEY)) {
   sessionStorage.setItem(PAGE_VIEW_KEY, "1");
   trackNameFuture("page_view");
 }
+// One-time cleanup of legacy local paid flags.
+localStorage.removeItem(PAID_KEY);
+setCookie(PAID_KEY, "", -1);
+
 verifyReturnedPayment();
 </script>
 </body></html>
