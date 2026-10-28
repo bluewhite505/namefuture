@@ -599,6 +599,7 @@ async function sendNameFutureReport(eventName, details = {}) {
     shortlist: details.shortlist || "",
     winner: details.winner || "",
     winner_score: details.winner_score ?? "",
+    comparison: details.comparison || "",
     amount: details.amount ?? "",
     currency: details.currency || ""
   };
@@ -674,6 +675,7 @@ async function verifyReturnedPayment() {
         </div>
       </div>`;
   } catch (e) {
+    try { await releasePaidShortlist(reservationId); } catch (_) {}
     box.innerHTML = `
       <div class="result-shell">
         <div class="free-side">
@@ -743,33 +745,56 @@ function showPaidComparisonUsed() {
 }
 
 
-async function consumePaidShortlist(names) {
-  const sessionId =
+function getPaidSessionId() {
+  return (
     localStorage.getItem(PAID_SESSION_KEY) ||
     getCookie(PAID_SESSION_KEY) ||
-    "";
+    ""
+  );
+}
 
-  if (!sessionId) {
-    return {ok:false, allowed:false, reason:"missing_session"};
-  }
-
+async function paidAccessRequest(path, payload) {
   try {
     const response = await fetch(
-      "https://namefuture-payment-verify.kmirtchmue.workers.dev/use",
+      `https://namefuture-payment-verify.kmirtchmue.workers.dev${path}`,
       {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          session_id: sessionId,
-          names
-        })
+        body: JSON.stringify(payload)
       }
     );
 
     return await response.json();
   } catch (e) {
-    return {ok:false, allowed:false, reason:"network_error"};
+    return {ok:false, reason:"network_error"};
   }
+}
+
+async function reservePaidShortlist(names) {
+  const sessionId = getPaidSessionId();
+
+  if (!sessionId) {
+    return {ok:false, allowed:false, reason:"missing_session"};
+  }
+
+  return paidAccessRequest("/reserve", {
+    session_id: sessionId,
+    names
+  });
+}
+
+async function confirmPaidShortlist(reservationId) {
+  return paidAccessRequest("/confirm", {
+    session_id: getPaidSessionId(),
+    reservation_id: reservationId
+  });
+}
+
+async function releasePaidShortlist(reservationId) {
+  return paidAccessRequest("/release", {
+    session_id: getPaidSessionId(),
+    reservation_id: reservationId
+  });
 }
 
 function showPaidAccessError(reason) {
@@ -784,6 +809,10 @@ function showPaidAccessError(reason) {
     title = "We could not find the verified Stripe purchase for this browser.";
   } else if (reason === "purchase_not_verified") {
     title = "This purchase could not be verified.";
+  } else if (reason === "already_reserved") {
+    title = "This purchase already has a comparison in progress.";
+  } else if (reason === "invalid_reservation") {
+    title = "The paid comparison could not be confirmed.";
   }
 
   box.innerHTML = `
@@ -821,9 +850,9 @@ async function runPaidCompare() {
     return;
   }
 
-  const access = await consumePaidShortlist(uniqueNames);
+  const access = await reservePaidShortlist(uniqueNames);
 
-  if (!access || access.allowed !== true) {
+  if (!access || access.allowed !== true || !access.reservation_id) {
     if (access?.reason === "already_used") {
       markPaidCompareUsed();
     }
@@ -831,6 +860,7 @@ async function runPaidCompare() {
     return;
   }
 
+  const reservationId = access.reservation_id;
   const box = document.querySelector("#results");
   box.innerHTML = `
     <div class="result-shell">
@@ -920,6 +950,14 @@ async function runPaidCompare() {
         </div>
       </div>`;
 
+    const confirmation = await confirmPaidShortlist(reservationId);
+
+    if (!confirmation || confirmation.confirmed !== true) {
+      await releasePaidShortlist(reservationId);
+      showPaidAccessError(confirmation?.reason || "verification_failed");
+      return;
+    }
+
     markPaidCompareUsed();
 
     trackNameFuture("paid_compare_run", {
@@ -927,13 +965,20 @@ async function runPaidCompare() {
       name: uniqueNames.join("|")
     });
 
+    const comparisonText = rows.map(r => {
+      if (r.missing) return `${r.name}: no published SSA record`;
+      const currentRank = r.current ? `#${r.current.rank}` : "—";
+      return `${r.name}: ${r.score}/100 ${r.level} risk; now ${currentRank}; 2030 #${r.lo}–#${r.hi}; same-name ${(r.collision30*100).toFixed(1)}%`;
+    }).join(" | ");
+
     sendNameFutureReport("paid_report_ready", {
       report_type: "paid",
       email: localStorage.getItem(EMAIL_KEY) || getCookie(EMAIL_KEY) || "",
       sex,
       shortlist: uniqueNames.join("|"),
       winner: winner ? winner.name : "",
-      winner_score: winner ? winner.score : ""
+      winner_score: winner ? winner.score : "",
+      comparison: comparisonText
     });
   } catch (e) {
     box.innerHTML = `
