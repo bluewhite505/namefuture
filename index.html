@@ -114,7 +114,7 @@
 <section id="results" class="results shell"></section>
 <section class="band"><div class="band-in shell"><h2>Today's rank is only a snapshot.</h2><p>A name can be outside the Top 100 and still be moving fast enough to feel completely different five years from now. NameFuture turns popularity into a decision signal: crowding, collision risk and a deliberately conservative future range.</p></div></section>
 <section class="bento shell"><div class="bento-head"><span>THE DECISION LAYER</span><h2>Baby-name lists help you find names.<br>NameFuture helps you choose one.</h2></div><div class="cards"><article class="card big"><span class="num">01 / SATURATION</span><div class="giant">82</div><h3>See how crowded the name already is.</h3><p>One score converts ranking and usage share into something you can actually compare.</p></article><article class="card"><span class="num">02 / COLLISION</span><h3>Will there be another one in the room?</h3><p>Translate abstract popularity into an intuitive same-name probability.</p></article><article class="card pink"><span class="num">03 / FUTURE</span><h3>Spot the trend trap before it feels obvious.</h3><p>Direction and range, not fake precision.</p></article><article class="card"><span class="num">04 / COMPARE</span><h3>Five finalists. One side-by-side verdict.</h3><p>The paid decision view removes the Notes-app guessing game.</p></article><article class="card"><span class="num">05 / SHARE</span><h3>Send the result to your partner.</h3><p>The result is designed to be understandable in one screenshot.</p></article></div></section>
-<section class="offer-section shell"><div class="offer-box"><div><div class="offer-kicker">THE DECISION, NOT ANOTHER LIST</div><h2>You don’t need more baby names.<br>You need help choosing the right one.</h2><p>NameFuture compares up to five names on your shortlist using real U.S. popularity data and trend signals, so you can see what’s popular now, what’s quietly rising, and which finalist carries the lowest future crowding risk.</p></div><div class="offer-side"><b>Check one name free.</b><ul><li>Current popularity</li><li>Rising-name trends</li><li>Future popularity ranges</li><li>Saturation and collision risk</li><li>Side-by-side shortlist comparison</li></ul><button class="offer-free-btn" onclick="document.querySelector('#name').focus();document.querySelector('#name').scrollIntoView({behavior:'smooth',block:'center'})">Check My Name Free →</button><div class="offer-price">Then compare up to 5 finalists for $19 · one-time · no subscription</div></div></div></section>
+<section class="offer-section shell"><div class="offer-box"><div><div class="offer-kicker">THE DECISION, NOT ANOTHER LIST</div><h2>You don’t need more baby names.<br>You need help choosing the right one.</h2><p>NameFuture compares up to five names on your shortlist using real U.S. popularity data and trend signals, so you can see what’s popular now, what’s quietly rising, and which finalist carries the lowest future crowding risk.</p></div><div class="offer-side"><b>Check one name free.</b><ul><li>Current popularity</li><li>Rising-name trends</li><li>Future popularity ranges</li><li>Saturation and collision risk</li><li>Side-by-side shortlist comparison</li></ul><button class="offer-free-btn" onclick="trackNameFuture('offer_cta_clicked');document.querySelector('#name').focus();document.querySelector('#name').scrollIntoView({behavior:'smooth',block:'center'})">Check My Name Free →</button><div class="offer-price">Then compare up to 5 finalists for $19 · one-time · no subscription</div></div></div></section>
 <div class="source shell">Data source: U.S. Social Security Administration national baby-name files, 1880 through the latest published year. Names with fewer than 5 occurrences in a year are suppressed by SSA for privacy. Forecasts are directional estimates, not guarantees.</div>
 </main>
 <footer class="footer shell"><div class="brand">Name<span>Future</span></div><span>Make the name choice with your eyes open.</span></footer>
@@ -224,8 +224,47 @@ function getUTM() {
   };
 }
 
-function trackNameFuture(eventName, extra = {}) {
+
+const NAMEFUTURE_LAST_STAGE_KEY = "namefuture_last_stage_v1";
+const NAMEFUTURE_STAGE_EVENTS = new Set([
+  "page_view",
+  "offer_cta_clicked",
+  "name_input_started",
+  "name_submitted",
+  "free_result_seen",
+  "save_clicked",
+  "email_input_started",
+  "email_saved",
+  "second_name_attempted",
+  "paywall_seen",
+  "checkout_clicked",
+  "payment_success",
+  "paid_compare_started",
+  "paid_compare_run"
+]);
+
+function rememberNameFutureStage(eventName) {
+  if (NAMEFUTURE_STAGE_EVENTS.has(eventName)) {
+    sessionStorage.setItem(NAMEFUTURE_LAST_STAGE_KEY, eventName);
+  }
+}
+
+function makeNameFuturePayload(eventName, extra = {}) {
   const utm = getUTM();
+  return {
+    timestamp: new Date().toISOString(),
+    session_id: getSessionId(),
+    event: eventName,
+    name: extra.name || "",
+    sex: extra.sex || "",
+    email: extra.email || "",
+    referrer: document.referrer || "",
+    page_url: window.location.href,
+    ...utm
+  };
+}
+
+function trackNameFuture(eventName, extra = {}) {
 
   // Prevent the same user action from being counted twice by rapid
   // double-clicks, re-rendered handlers, or embedded previews.
@@ -247,17 +286,8 @@ function trackNameFuture(eventName, extra = {}) {
     sessionStorage.setItem(dedupeKey, String(now));
   }
 
-  const payload = {
-    timestamp: new Date().toISOString(),
-    session_id: getSessionId(),
-    event: eventName,
-    name: extra.name || "",
-    sex: extra.sex || "",
-    email: extra.email || "",
-    referrer: document.referrer || "",
-    page_url: window.location.href,
-    ...utm
-  };
+  const payload = makeNameFuturePayload(eventName, extra);
+  rememberNameFutureStage(eventName);
 
   fetch(NAMEFUTURE_WEBHOOK, {
     method: "POST",
@@ -384,6 +414,8 @@ function showPaidCompareUnlocked(prefillName = "", prefillSex = "") {
 async function runPaidCompare() {
   if (!paidUnlocked()) return;
 
+  trackNameFuture("paid_compare_started");
+
   const sex = document.querySelector("#paidSex").value;
   const names = [
     document.querySelector("#paidName1").value,
@@ -504,6 +536,57 @@ async function runPaidCompare() {
   }
 }
 
+
+
+// Funnel diagnostics: capture intent before submission and abandonment after the last meaningful stage.
+let nameInputStartedTracked = false;
+let emailInputStartedTracked = false;
+let exitTracked = false;
+
+document.addEventListener("input", (e) => {
+  if (e.target && e.target.id === "name" && !nameInputStartedTracked && norm(e.target.value)) {
+    nameInputStartedTracked = true;
+    trackNameFuture("name_input_started", {
+      name: title(e.target.value),
+      sex: document.querySelector("#sex")?.value || ""
+    });
+  }
+
+  if (e.target && e.target.id === "resultEmail" && !emailInputStartedTracked && e.target.value.trim()) {
+    emailInputStartedTracked = true;
+    trackNameFuture("email_input_started", {
+      email: e.target.value.trim()
+    });
+  }
+});
+
+function trackNameFutureExit() {
+  if (exitTracked) return;
+  exitTracked = true;
+
+  const lastStage = sessionStorage.getItem(NAMEFUTURE_LAST_STAGE_KEY) || "page_view";
+  const eventName = "exit_after_" + lastStage;
+  const payload = makeNameFuturePayload(eventName);
+
+  try {
+    const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(NAMEFUTURE_WEBHOOK, blob);
+      return;
+    }
+  } catch (e) {}
+
+  try {
+    fetch(NAMEFUTURE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+window.addEventListener("pagehide", trackNameFutureExit);
 
 // Count one page view per page/tab session instead of every preview re-render.
 const PAGE_VIEW_KEY = "namefuture_page_view_" + location.pathname + location.search;
