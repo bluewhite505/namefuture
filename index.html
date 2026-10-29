@@ -587,7 +587,13 @@ function trackNameFuture(eventName, extra = {}) {
     },
     body: JSON.stringify(payload),
     keepalive: true
-  }).catch(() => {});
+  }).then(response => {
+    if (!response.ok) {
+      console.warn("NameFuture tracking failed:", eventName, response.status);
+    }
+  }).catch(error => {
+    console.warn("NameFuture tracking error:", eventName, error);
+  });
 }
 
 
@@ -595,6 +601,7 @@ const NAMEFUTURE_PAYMENT_VERIFY = "https://namefuture-payment-verify.kmirtchmue.
 const PAID_KEY = "namefuture_paid_v1";
 const PAID_COMPARE_USED_KEY = "namefuture_paid_compare_used_v1";
 const PAID_SESSION_KEY = "namefuture_paid_session_id_v1";
+const PAYMENT_SUCCESS_TRACKED_PREFIX = "namefuture_payment_success_tracked_";
 
 function paidUnlocked() {
   // Legacy local paid flags are NOT trusted anymore.
@@ -673,16 +680,59 @@ function markPaidUnlocked(email = "", sessionId = "") {
 
 async function sendNameFutureReport(eventName, details = {}) {
   const utm = getUTM();
+  const email = details.email || localStorage.getItem(EMAIL_KEY) || getCookie(EMAIL_KEY) || "";
+
+  // Build a complete email body here so Make does not need to discover
+  // new webhook fields. For report events we also place this HTML in the
+  // existing utm_content field, which is already part of the webhook schema.
+  let reportHtml = "";
+
+  if (eventName === "free_report_ready") {
+    reportHtml = `
+      <h2>Your NameFuture report is ready</h2>
+      <p><strong>Name:</strong> ${escapeHtml(details.name || "")}</p>
+      <p>
+        <strong>Current rank:</strong> ${escapeHtml(details.current_rank || "—")}<br>
+        <strong>Risk score:</strong> ${escapeHtml(String(details.score ?? ""))}/100<br>
+        <strong>Risk level:</strong> ${escapeHtml(details.level || "")}<br>
+        <strong>Projected range:</strong> ${escapeHtml(details.projected_range || "")}<br>
+        <strong>Same-name collision risk:</strong> ${escapeHtml(details.collision_30 || "")}
+      </p>
+      <p>This is a directional estimate based on U.S. SSA baby-name data and recent ranking trajectory. Future popularity is not guaranteed.</p>
+      <p>If you're choosing between several names, NameFuture can compare up to five finalists side by side and identify the lowest projected crowding risk.</p>
+      <p>NameFuture</p>`;
+  }
+
+  if (eventName === "paid_report_ready") {
+    reportHtml = `
+      <h2>Your NameFuture shortlist comparison is ready</h2>
+      <p><strong>Your shortlist:</strong><br>${escapeHtml(details.shortlist || "")}</p>
+      <p><strong>Lowest projected crowding-risk pick:</strong><br>${escapeHtml(details.winner || "")}</p>
+      <p><strong>Winner score:</strong> ${escapeHtml(String(details.winner_score ?? ""))}/100</p>
+      <p><strong>Full comparison:</strong><br>${escapeHtml(details.comparison || "")}</p>
+      <p>This comparison is based on U.S. SSA baby-name data and directional trend estimates. Future popularity is not guaranteed.</p>
+      <p>Keep this email so you can review the shortlist with your partner later.</p>
+      <p>NameFuture</p>`;
+  }
+
   const payload = {
     timestamp: new Date().toISOString(),
     session_id: getSessionId(),
     event: eventName,
-    name: details.name || "",
+    name: details.name || details.winner || "",
     sex: details.sex || "",
-    email: details.email || localStorage.getItem(EMAIL_KEY) || getCookie(EMAIL_KEY) || "",
+    email,
     referrer: document.referrer || "",
     page_url: window.location.href,
-    ...utm,
+    utm_source: utm.utm_source,
+    utm_medium: utm.utm_medium,
+    utm_campaign: utm.utm_campaign,
+    // Compatibility bridge for the existing Make webhook schema.
+    // Gmail can map Webhook 1 -> utm_content directly as Raw HTML.
+    utm_content: reportHtml || utm.utm_content,
+
+    // Keep the explicit flat report fields too. They are useful once Make's
+    // data structure is refreshed, but email delivery no longer depends on them.
     report_type: details.report_type || "",
     score: details.score ?? "",
     level: details.level || "",
@@ -693,18 +743,34 @@ async function sendNameFutureReport(eventName, details = {}) {
     winner: details.winner || "",
     winner_score: details.winner_score ?? "",
     comparison: details.comparison || "",
+    report_html: reportHtml,
     amount: details.amount ?? "",
     currency: details.currency || ""
   };
 
   try {
-    await fetch(NAMEFUTURE_WEBHOOK, {
+    const response = await fetch(NAMEFUTURE_WEBHOOK, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(payload),
       keepalive: true
     });
-  } catch (e) {}
+
+    if (!response.ok) {
+      console.warn("NameFuture report webhook failed:", eventName, response.status);
+    }
+  } catch (e) {
+    console.warn("NameFuture report webhook error:", eventName, e);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 async function verifyReturnedPayment() {
@@ -734,23 +800,30 @@ async function verifyReturnedPayment() {
     if (response.ok && data.ok === true && data.paid === true) {
       markPaidUnlocked(data.customer_email || "", sessionId);
 
-      trackNameFuture("payment_success", {
-        email: data.customer_email || ""
-      });
+      const paymentTrackedKey = PAYMENT_SUCCESS_TRACKED_PREFIX + sessionId;
+      const paymentAlreadyTracked = localStorage.getItem(paymentTrackedKey) === "1";
 
-      sendNameFutureReport("payment_confirmation", {
-        report_type: "payment_confirmation",
-        email: data.customer_email || "",
-        amount: 19,
-        currency: "USD"
-      });
-
-      if (typeof window.rdt === "function") {
-        window.rdt("track", "Purchase", {
-          value: 19,
-          currency: "USD",
-          itemCount: 1
+      if (!paymentAlreadyTracked) {
+        trackNameFuture("payment_success", {
+          email: data.customer_email || ""
         });
+
+        sendNameFutureReport("payment_confirmation", {
+          report_type: "payment_confirmation",
+          email: data.customer_email || "",
+          amount: 19,
+          currency: "USD"
+        });
+
+        if (typeof window.rdt === "function") {
+          window.rdt("track", "Purchase", {
+            value: 19,
+            currency: "USD",
+            itemCount: 1
+          });
+        }
+
+        localStorage.setItem(paymentTrackedKey, "1");
       }
 
       history.replaceState({}, document.title, window.location.pathname);
@@ -768,7 +841,6 @@ async function verifyReturnedPayment() {
         </div>
       </div>`;
   } catch (e) {
-    try { await releasePaidShortlist(reservationId); } catch (_) {}
     box.innerHTML = `
       <div class="result-shell">
         <div class="free-side">
@@ -807,11 +879,6 @@ async function showPaidCompareUnlocked(prefillName = "", prefillSex = "", alread
     }
   }
 
-  if (paidCompareUsed()) {
-    // local marker is only a UI convenience; server verification above is authoritative
-    showPaidComparisonUsed();
-    return;
-  }
   const email = localStorage.getItem(EMAIL_KEY) || getCookie(EMAIL_KEY) || "";
   const defaultSex = prefillSex === "M" ? "M" : "F";
 
@@ -946,7 +1013,18 @@ function showPaidAccessError(reason) {
 }
 
 async function runPaidCompare() {
-  if (!paidUnlocked()) return;
+  const verifiedPaid = await getVerifiedPaidAccess();
+
+  if (!verifiedPaid.paid) {
+    showPaidAccessError("purchase_not_verified");
+    return;
+  }
+
+  if (verifiedPaid.used) {
+    markPaidCompareUsed();
+    showPaidComparisonUsed();
+    return;
+  }
 
   trackNameFuture("paid_compare_started");
 
@@ -1099,6 +1177,7 @@ async function runPaidCompare() {
       comparison: comparisonText
     });
   } catch (e) {
+    try { await releasePaidShortlist(reservationId); } catch (_) {}
     box.innerHTML = `
       <div class="result-shell">
         <div class="free-side">
@@ -1127,7 +1206,7 @@ document.addEventListener("input", (e) => {
     });
   }
 
-  if (e.target && e.target.id === "resultEmail" && !emailInputStartedTracked && e.target.value.trim()) {
+  if (e.target && (e.target.id === "resultEmail" || e.target.id === "freeGateEmail") && !emailInputStartedTracked && e.target.value.trim()) {
     emailInputStartedTracked = true;
     trackNameFuture("email_input_started", {
       email: e.target.value.trim()
