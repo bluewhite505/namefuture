@@ -438,6 +438,8 @@ async function analyze(skipEmailGate=false){
   const sex=document.querySelector('#sex').value;
   if(!norm(raw))return;
 
+  trackNameFuture('name_submit_attempted',{name:title(raw),sex});
+
   let savedEmail=
     localStorage.getItem(EMAIL_KEY)||
     getCookie(EMAIL_KEY)||
@@ -528,6 +530,7 @@ const NAMEFUTURE_STAGE_EVENTS = new Set([
   "page_view",
   "offer_cta_clicked",
   "name_input_started",
+  "name_submit_attempted",
   "name_submitted",
   "free_result_seen",
   "save_clicked",
@@ -1207,10 +1210,7 @@ let exitTracked = false;
 document.addEventListener("input", (e) => {
   if (e.target && e.target.id === "name" && !nameInputStartedTracked && norm(e.target.value)) {
     nameInputStartedTracked = true;
-    trackNameFuture("name_input_started", {
-      name: title(e.target.value),
-      sex: document.querySelector("#sex")?.value || ""
-    });
+    trackNameFuture("name_input_started",{sex:document.querySelector("#sex").value});
   }
 
   if (e.target && (e.target.id === "resultEmail" || e.target.id === "freeGateEmail") && !emailInputStartedTracked && e.target.value.trim()) {
