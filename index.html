@@ -484,7 +484,7 @@ async function analyze(skipEmailGate=false){
     return;
   }
 
-const box=loading(raw);try{const meta=await getMeta();const found=await lookup(raw,sex);if(!found){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${title(raw)}</div></div></div><div class="free-side"><div class="verdict"><h3>No published SSA record found.</h3><p>SSA only publishes a name/sex/year combination when at least 5 babies received that name. This spelling may be extremely rare, absent from Social Security records, or entered differently.</p></div></div></div>`;return}const r=calc(found,meta);if(!r){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${found.name}</div></div></div><div class="free-side"><div class="verdict"><h3>Not recorded for this sex.</h3><p>The name exists in SSA data, but not for the selected sex at the publication threshold.</p></div></div></div>`;return}markFreeUsed(r.name);trackNameFuture('free_result_seen',{name:r.name,sex});sendNameFutureReport('free_report_ready',{report_type:'free',name:r.name,sex,email:localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'',score:r.score,level:r.level,current_rank:r.current?`#${r.current.rank}`:'—',projected_range:`#${r.lo}–#${r.hi}`,collision_30:`${(r.collision30*100).toFixed(1)}%`});const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';const currentRank=r.current?`#${r.current.rank}`:'—';const lastSeen=r.current?`${r.latestYear}`:`${r.last.year}`;const saved=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">YOUR ONE FREE NAME FUTURE · SSA ${r.firstYear}–${r.latestYear}</div><div class="rn">${r.name}</div></div><div class="score-pill"><strong>${r.score}<small>/100</small></strong><span>${r.level} SATURATION RISK</span></div></div><div class="result-body"><div class="free-side"><div class="stats"><div class="stat"><small>${r.latestYear} national rank</small><b>${currentRank}</b></div><div class="stat"><small>Same-name chance · 30 kids</small><b>${(r.collision30*100).toFixed(1)}%</b></div><div class="stat"><small>2030 projected range*</small><b>#${r.lo}–#${r.hi}</b></div></div><div class="verdict"><h3>${r.level==='HIGH'?'Trend-trap warning.':'The read on '+r.name+'.'}</h3><p>${verdict(r)}</p></div><div class="stats" style="margin-top:10px"><div class="stat"><small>First SSA record</small><b>${r.firstYear}</b></div><div class="stat"><small>Most recent record</small><b>${lastSeen}</b></div><div class="stat"><small>Years recorded</small><b>${r.yearsSeen}</b></div></div><div class="report-linked"><b>Report linked to ${saved || 'your email'}.</b> Your free check is now used. If you want to compare the names you’re seriously considering, use the shortlist decision report.</div><button class="share" onclick="shareResult('${r.name.replace(/'/g,"\'")}',${r.score},'${r.level}')">Copy shareable result ↗</button><div class="note">*Directional estimate from recent national ranking trajectory. SSA suppresses name/sex/year combinations with fewer than 5 occurrences.</div></div><aside class="paid"><small>YOUR SHORTLIST DECISION</small><h3>${r.name.toUpperCase()} ${r.level==='HIGH'?'is getting crowded.':r.level==='MEDIUM'?'is in the watch zone.':'looks relatively low-risk.'}</h3><p>Today it ranks ${currentRank}.${r.current?` Its recent trajectory suggests it could move into the #${r.lo}–#${r.hi} range by 2030.`:''}</p><h3 style="font-size:27px;margin-top:22px">But how does it compare with the names you may actually choose?</h3><p>You probably have more than one favorite. Compare them before you make the final call.</p><div style="font-family:'Manrope';font-size:20px;font-weight:800;margin:22px 0 8px">Compare your real shortlist</div><ul><li>See which is least likely to feel overused</li><li>Compare saturation side by side</li><li>See future popularity ranges</li><li>Check same-name collision risk</li><li>Share the shortlist with your partner</li></ul><div style="font-size:14px;font-weight:900;margin:10px 0 14px">$19 one-time · 1 shortlist · up to 5 names · No subscription</div><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${r.name.replace(/'/g,"\'")}',sex:'${sex}'})">Compare My Shortlist · ${CFG.PRODUCT_PRICE||'$19'} →</a><div style="font-size:11px;text-align:center;margin-top:10px;font-weight:800;color:#48502f">No guessing. No endless baby-name lists. Just a clearer decision.</div></aside></div></div>`}catch(err){box.innerHTML=`<div class="result-shell"><div class="free-side"><div class="verdict"><h3>We couldn't load the name data.</h3><p>${err.message} Please refresh the page and try again.</p></div></div></div>`}}
+const box=loading(raw);try{const meta=await getMeta();const found=await lookup(raw,sex);if(!found){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${title(raw)}</div></div></div><div class="free-side"><div class="verdict"><h3>No published SSA record found.</h3><p>SSA only publishes a name/sex/year combination when at least 5 babies received that name. This spelling may be extremely rare, absent from Social Security records, or entered differently.</p></div></div></div>`;return}const r=calc(found,meta);if(!r){box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">FULL SSA DATABASE</div><div class="rn">${found.name}</div></div></div><div class="free-side"><div class="verdict"><h3>Not recorded for this sex.</h3><p>The name exists in SSA data, but not for the selected sex at the publication threshold.</p></div></div></div>`;return}markFreeUsed(r.name);trackNameFuture('free_result_seen',{name:r.name,sex});sendNameFutureReport('free_report_ready',{report_type:'free',name:r.name,sex,email:localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'',score:r.score,level:r.level,current_rank:r.current?`#${r.current.rank}`:'—',projected_range:`#${r.lo}–#${r.hi}`,collision_30:`${(r.collision30*100).toFixed(1)}%`});const stripe='https://buy.stripe.com/cNifZgdNS8mdbqE5erdwc01';const currentRank=r.current?`#${r.current.rank}`:'—';const lastSeen=r.current?`${r.latestYear}`:`${r.last.year}`;const saved=localStorage.getItem(EMAIL_KEY)||getCookie(EMAIL_KEY)||'';box.innerHTML=`<div class="result-shell"><div class="result-head"><div><div class="rk">YOUR ONE FREE NAME FUTURE · SSA ${r.firstYear}–${r.latestYear}</div><div class="rn">${r.name}</div></div><div class="score-pill"><strong>${r.score}<small>/100</small></strong><span>${r.level} SATURATION RISK</span></div></div><div class="result-body"><div class="free-side"><div class="stats"><div class="stat"><small>${r.latestYear} national rank</small><b>${currentRank}</b></div><div class="stat"><small>Saturation risk</small><b>${r.score}/100</b></div><div class="stat"><small>Risk level</small><b>${r.level}</b></div></div><div class="verdict"><h3>${r.level==='HIGH'?'This name is already carrying meaningful crowding risk.':r.level==='MEDIUM'?'This name is in the watch zone.':'This name currently shows a lower crowding signal.'}</h3><p>${r.level==='HIGH'?`${r.name} is already in a crowded part of the market. The free report tells you the headline signal — but not whether one of your other finalists is a safer long-term choice.`:r.level==='MEDIUM'?`${r.name} is recognizable and active enough that future crowding is plausible. The key question is whether another name on your shortlist carries a stronger long-term profile.`:`${r.name} currently looks relatively low-risk. But one name can look good on its own and still lose when you compare the full shortlist side by side.`}</p></div><div class="report-linked"><b>Free report linked to ${saved || 'your email'}.</b> You’ve seen the headline signal for ${r.name}. The full shortlist report unlocks future range, collision risk, side-by-side scoring and the lowest-risk finalist across up to 5 names.</div><button class="share" onclick="shareResult('${r.name.replace(/'/g,"\'")}',${r.score},'${r.level}')">Copy shareable result ↗</button><div class="note">Based on official U.S. SSA national baby-name data. Forecasts are directional estimates, not guarantees.</div></div><aside class="paid"><small>YOUR SHORTLIST DECISION</small><h3>${r.name.toUpperCase()} ${r.level==='HIGH'?'is getting crowded.':r.level==='MEDIUM'?'is in the watch zone.':'looks relatively low-risk.'}</h3><p>Today it ranks ${currentRank}. Your free report gives you the headline signal. The paid shortlist report reveals how ${r.name} compares against the other names you may actually choose.</p><h3 style="font-size:27px;margin-top:22px">Is ${r.name} actually the best long-term choice on your shortlist?</h3><p>You probably have more than one favorite. Compare them before you make the final call.</p><div style="font-family:'Manrope';font-size:20px;font-weight:800;margin:22px 0 8px">Compare your real shortlist</div><ul><li>See which is least likely to feel overused</li><li>Compare saturation side by side</li><li>See future popularity ranges</li><li>Check same-name collision risk</li><li>Share the shortlist with your partner</li></ul><div style="font-size:14px;font-weight:900;margin:10px 0 14px">$19 one-time · 1 shortlist · up to 5 names · No subscription</div><a class="paybtn" href="${stripe}" target="_blank" rel="noopener" onclick="trackNameFuture('checkout_clicked',{name:'${r.name.replace(/'/g,"\'")}',sex:'${sex}'})">Compare My Shortlist · ${CFG.PRODUCT_PRICE||'$19'} →</a><div style="font-size:11px;text-align:center;margin-top:10px;font-weight:800;color:#48502f">No guessing. No endless baby-name lists. Just a clearer decision.</div></aside></div></div>`}catch(err){box.innerHTML=`<div class="result-shell"><div class="free-side"><div class="verdict"><h3>We couldn't load the name data.</h3><p>${err.message} Please refresh the page and try again.</p></div></div></div>`}}
 async function shareResult(name,score,level){const text=`${name}'s baby-name saturation risk: ${score}/100 (${level}). Would you still use it?`;try{await navigator.clipboard.writeText(text+' '+location.href);alert('Result copied.')}catch(e){alert(text)}}
 document.querySelector('#name').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
 </script>
@@ -513,14 +513,59 @@ function getSessionId() {
   return id;
 }
 
+const NAMEFUTURE_ATTRIBUTION_KEY = "namefuture_attribution_v1";
+
 function getUTM() {
   const params = new URLSearchParams(window.location.search);
 
-  return {
+  const direct = {
     utm_source: params.get("utm_source") || "",
     utm_medium: params.get("utm_medium") || "",
     utm_campaign: params.get("utm_campaign") || "",
     utm_content: params.get("utm_content") || ""
+  };
+
+  const hasDirectUTM = Object.values(direct).some(Boolean);
+
+  if (hasDirectUTM) {
+    localStorage.setItem(NAMEFUTURE_ATTRIBUTION_KEY, JSON.stringify(direct));
+    return direct;
+  }
+
+  if (params.get("rdt_cid")) {
+    const redditFallback = {
+      utm_source: "reddit",
+      utm_medium: "paid",
+      utm_campaign: "namefuture_sales",
+      utm_content: ""
+    };
+
+    localStorage.setItem(NAMEFUTURE_ATTRIBUTION_KEY, JSON.stringify(redditFallback));
+    return redditFallback;
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAMEFUTURE_ATTRIBUTION_KEY) || "null");
+
+    if (
+      saved &&
+      typeof saved === "object" &&
+      ["utm_source","utm_medium","utm_campaign","utm_content"].every(k => k in saved)
+    ) {
+      return {
+        utm_source: saved.utm_source || "",
+        utm_medium: saved.utm_medium || "",
+        utm_campaign: saved.utm_campaign || "",
+        utm_content: saved.utm_content || ""
+      };
+    }
+  } catch (e) {}
+
+  return {
+    utm_source: "",
+    utm_medium: "",
+    utm_campaign: "",
+    utm_content: ""
   };
 }
 
@@ -704,12 +749,9 @@ async function sendNameFutureReport(eventName, details = {}) {
       <p>
         <strong>Current rank:</strong> ${escapeHtml(details.current_rank || "—")}<br>
         <strong>Risk score:</strong> ${escapeHtml(String(details.score ?? ""))}/100<br>
-        <strong>Risk level:</strong> ${escapeHtml(details.level || "")}<br>
-        <strong>Projected range:</strong> ${escapeHtml(details.projected_range || "")}<br>
-        <strong>Same-name collision risk:</strong> ${escapeHtml(details.collision_30 || "")}
+        <strong>Risk level:</strong> ${escapeHtml(details.level || "")}
       </p>
-      <p>This is a directional estimate based on U.S. SSA baby-name data and recent ranking trajectory. Future popularity is not guaranteed.</p>
-      <p>If you're choosing between several names, NameFuture can compare up to five finalists side by side and identify the lowest projected crowding risk.</p>
+      <p>Your free report gives you the headline signal for one name. The shortlist decision report unlocks the side-by-side comparison, future crowding ranges, collision risk, and the lowest-risk finalist across up to five names.</p>
       <p>NameFuture</p>`;
   }
 
