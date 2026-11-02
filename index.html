@@ -491,16 +491,23 @@ const NAMEFUTURE_WEBHOOK =
   "https://hook.eu1.make.com/zxf3bd596sewjwehqs1pv6o1oe3s9zns";
 
 function getSessionId() {
-  let id = localStorage.getItem("namefuture_session_id");
+  const SESSION_ID_KEY = "namefuture_session_id";
+  const SESSION_LAST_KEY = "namefuture_session_last_activity";
+  const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+  const now = Date.now();
 
-  if (!id) {
+  let id = localStorage.getItem(SESSION_ID_KEY);
+  const lastActivity = Number(localStorage.getItem(SESSION_LAST_KEY) || 0);
+
+  if (!id || !lastActivity || now - lastActivity > SESSION_TIMEOUT_MS) {
     id =
       (crypto.randomUUID && crypto.randomUUID()) ||
-      "nf_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+      "nf_" + now + "_" + Math.random().toString(36).slice(2);
 
-    localStorage.setItem("namefuture_session_id", id);
+    localStorage.setItem(SESSION_ID_KEY, id);
   }
 
+  localStorage.setItem(SESSION_LAST_KEY, String(now));
   return id;
 }
 
@@ -1243,9 +1250,9 @@ function trackNameFutureExit() {
 window.addEventListener("pagehide", trackNameFutureExit);
 
 // Count one page view per page/tab session instead of every preview re-render.
-const PAGE_VIEW_KEY = "namefuture_page_view_" + location.pathname + location.search;
-if (!sessionStorage.getItem(PAGE_VIEW_KEY)) {
-  sessionStorage.setItem(PAGE_VIEW_KEY, "1");
+const PAGE_VIEW_KEY = "namefuture_page_view_" + getSessionId();
+if (!localStorage.getItem(PAGE_VIEW_KEY)) {
+  localStorage.setItem(PAGE_VIEW_KEY, "1");
   trackNameFuture("page_view");
 }
 // One-time cleanup of legacy local paid flags.
